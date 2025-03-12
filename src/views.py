@@ -1,129 +1,185 @@
-from datetime import datetime
-
+import logging
+import re
+from datetime import datetime, time, timedelta
 from typing import Any
 
-from settings import EXCEL_PATH
-
-import logging
-
-from logging_config import setup_logging
-
-setup_logging()
 logger = logging.getLogger("my_log")
 
 
-def greetings(data_now: Any) -> str:
+def greetings(actual_time: str) -> str:
     """
-        Функция, принимающая время в виде строки и возвращающая приветствие в зависимости от времени суток.
+    Функция, принимающая время в виде строки в формате HH:MM:SS
+    и возвращающая приветствие в зависимости от времени суток.
     """
+    try:
 
-    logger.info("Определяем какое приветствие подойдет для текущего времени суток")
+        logger.info("Из переданной строки с датой создаем DataFrame")
 
-    hour = int(datetime.strftime(data_now, "%H"))
-    if 0 <= hour < 5:
-        return("Доброй ночи")
-    elif 5 < hour < 12:
-        return("Доброе утро")
-    elif 12 < hour < 19:
-        return("Добрый день")
-    else:
-        return("Добрый вечер")
+        date_obj = datetime.strptime(actual_time, "%H:%M:%S")
 
-    logger.info("Приветствие определено успешно")
+        greets = ["Доброе утро!", "Добрый день!", "Добрый вечер!", "Доброй ночи!"]
+
+        comparison_night = time(0, 0)
+        comparison_morning = time(4, 0)
+        comparison_day = time(12, 0)
+        comparison_evening = time(17, 0)
+
+        logger.info("Определяем какое приветствие подойдет для текущего времени суток")
+
+        if comparison_night <= date_obj.time() < comparison_morning:
+            greet = greets[3]
+
+        elif comparison_morning <= date_obj.time() < comparison_day:
+            greet = greets[0]
+
+        elif comparison_day <= date_obj.time() < comparison_evening:
+            greet = greets[1]
+
+        else:
+            greet = greets[2]
+
+        logger.info("Приветствие определено успешно")
+
+        return greet
+
+    except ValueError:
+
+        logger.error("Передано неверное время")
+
+        raise ValueError("Неверный формат времени")
 
 
-def sort_by_date(data_now):
+def sort_by_date(operations_list: list[dict], input_date: str) -> str | list[dict]:
     """
-        Функция, получающая список словарей с операциями и дату, возвращающая список, отфильтрованный
-        по дате с начала месяца, на который выпадает входящая дата, по входящую дату.
+    Функция, получающая список словарей с операциями и дату, возвращающая список, отфильтрованный
+    по дате с начала месяца, на который выпадает входящая дата, по входящую дату.
     """
-    logger.info("Определяем дату и сортируем по дате")
-
-    excel_dict = get_transactions_excel(EXCEL_PATH)
-    data_str = data_now.strftime("01.%m.%Y %H:%M:%S")
-    data_one = datetime.strptime(data_str, "%d.%m.%Y %H:%M:%S")
-    new_list = []
-    for dictonary in excel_dict:
-        if "Дата операции" in dictonary:
-            date_list = datetime.strptime(dictonary["Дата операции"], "%d.%m.%Y %H:%M:%S")
-            if data_one <= date_list <= data_now:
-                new_list.append(dictonary)
-    return new_list
-
-    logger.info("Список словарей успешно отсортирован")
-
-def info_card(sort_list):
-    """
-        Функция, принимающая список операций и возвращающая список словарей с данными о картах:
-        последние 4 цифры карты, общая сумма расходов, кешбэк (1 рубль на каждые 100 рублей) в формате
-        [{"last_digits": "4 последние цифры номера карты",
-          "total_spent": сумма расходов,
-          "cashback": кэшбек},
-        {...}]
-    """
-
-    logger.info("Определяем все карты")
-
-    new_list = []
-    for card_number in sort_list:
-        if "Номер карты" in card_number:
-            if isinstance(card_number["Номер карты"], str):
-                if card_number["Номер карты"] in new_list:
-                    continue
-                else:
-                    new_list.append(card_number["Номер карты"])
-
-    logger.info("Определяем сумму всех затрат по каждой карте")
-
-    list = []
-    for i in new_list:
-        sum = 0
-        for operation in sort_list:
-            if "Сумма операции" in operation and "Статус" in operation:
-                if operation["Статус"] == "OK":
-                    if i == operation["Номер карты"]:
-                        sum += operation["Сумма операции"]
-        list.append(abs(sum))
-
-    dict_list = dict(zip(new_list, list))
-
-    logger.info("Выводим список словарей с данными по картам")
+    pattern = re.compile(r"(\d{2})\.(\d{2})\.(\d{4})")
 
     result = []
-    for key, valye in dict_list.items():
-        last_digits = key
-        total_spent = valye
-        cashback = total_spent * 0.01
 
-        result.append({"last_digits": last_digits,
-                       "total_spent": round(total_spent, 2),
-                       "cashback": round(cashback, 2)})
+    logger.info("Проверяем переданную дату на корректный формат")
+
+    if input_date and pattern.fullmatch(input_date):
+
+        logger.info("Формат даты корректный")
+
+        day_int = int(input_date[:2])
+
+        input_date_obj = datetime.strptime(input_date, "%d.%m.%Y").date()
+
+        start = input_date_obj - timedelta(days=(day_int - 1))
+        stop = input_date_obj
+        logger.info("Фильтруем операции по дате")
+        for operation in operations_list:
+            operation_date_obj = datetime.strptime(
+                operation["Дата операции"], "%d.%m.%Y %H:%M:%S"
+            ).date()
+
+            if start <= operation_date_obj <= stop:
+                result.append(operation)
+
+    else:
+
+        logger.warning("Введена неверная дата")
+
+        print("Введена неверная дата. Введите дату в формате ДД.ММ.ГГГГ")
 
     return result
 
 
-
-def top_5(sorted_list):
+def get_card_info(operations_list: Any) -> Any:
     """
-        Функция, принимающая список словарей с операциями и возвращающая список из топ-5 транзакций по сумме
-        в формате:
-        [{"date": "дата",
-          "amount": сумма,
-          "category": "категория",
-          "description": "описание"},
-        {...}]
+    Функция, принимающая список операций и возвращающая список словарей с данными о картах:
+    последние 4 цифры карты, общая сумма расходов, кешбэк (1 рубль на каждые 100 рублей) в формате
+    [{"last_digits": "4 последние цифры номера карты",
+      "total_spent": сумма расходов,
+      "cashback": кэшбек},
+    {...}]
     """
-    logger.info("Выполняем сортировку топ-5 транзакций")
+    card_data = {}
+    pattern = re.compile(r"\*\d{4}")
 
-    sorted_transactions = sorted(sorted_list, key=lambda x: abs(x["Сумма платежа"]), reverse=True)
+    logger.info("Определяем номер карты")
+    for operation in operations_list:
+
+        if isinstance(operation["Номер карты"], str) and pattern.fullmatch(
+            operation["Номер карты"]
+        ):
+            if "Сумма операции" in operation and "Статус" in operation:
+
+                card_number = operation["Номер карты"][1:]
+                amount = operation["Сумма операции"]
+
+                logger.info("Проверяем статус каждой операции")
+
+                if operation["Статус"] == "OK" and float(amount) < 0:
+                    if card_number not in card_data:
+                        logger.info("Считаем сумму операций по каждой карте")
+
+                        card_data[card_number] = 0.0
+
+                    card_data[card_number] += abs(float(amount))
+
     result = []
-    for top in sorted_transactions[:5]:
-        date = top["Дата операции"].split()[0]
-        amount = abs(top["Сумма операции"])
-        category = top["Категория"]
-        description = top["Описание"]
 
-        info = {"date": date, "amount": round(amount, 2), "category": category, "description": description}
-        result.append(info)
+    logger.info("Формируем результат с данными о картах")
 
-    return(result)
+    for card_num, data in card_data.items():
+        last_digits = card_num
+        total_spent = data
+        cashback = total_spent * 0.01
+
+        result.append(
+            {
+                "last_digits": last_digits,
+                "total_spent": round(total_spent, 2),
+                "cashback": round(cashback, 2),
+            }
+        )
+
+    return result
+
+
+def get_top_transactions(operations_list: Any) -> Any:
+    """
+    Функция, принимающая список словарей с операциями и возвращающая список из топ-5 транзакций по сумме
+    в формате:
+    [{"date": "дата",
+      "amount": сумма,
+      "category": "категория",
+      "description": "описание"},
+    {...}]
+    """
+    n = 5
+    result = []
+
+    negative_transactions = [
+        operation
+        for operation in operations_list
+        if "Сумма операции" in operation and operation["Сумма операции"] < 0
+    ]
+
+    logger.info("Определяем топ-5 операций по сумме")
+
+    top_5 = sorted(
+        negative_transactions, key=lambda x: abs(x["Сумма операции"]), reverse=True
+    )[:n]
+
+    logger.info("Формируем данные для получения топ-5 операций в нужном формате")
+
+    for el in top_5:
+        date = el["Дата операции"].split()[0]
+        amount = abs(el["Сумма операции"])
+        category = el["Категория"]
+        description = el["Описание"]
+
+        short_info = {
+            "date": date,
+            "amount": round(amount, 2),
+            "category": category,
+            "description": description,
+        }
+        result.append(short_info)
+
+    return result

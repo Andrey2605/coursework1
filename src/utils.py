@@ -1,47 +1,109 @@
 import json
+import logging
+from typing import Any
 
 import pandas as pd
 
+logger = logging.getLogger("my_log")
 
-def get_transactions_excel(file_path)->list:
-    """Функция для считывания финансовых операций из Excel выдает список словарей с транзакциями."""
+
+def get_xlsx(file_path: Any) -> Any:
+    """
+    Функция, принимающая путь до Excel-файла и возвращающая список словарей и DataFrame.
+    """
     try:
-        transactions_excel = pd.read_excel(file_path)
-        transact_excel = transactions_excel.to_dict(orient="records")
-        return transact_excel
+        logger.info("Чтение данных из Excel-файла")
+
+        df = pd.read_excel(file_path)
+
+        logger.info("Проверка данных из файла на корректность")
+
+        if isinstance(df, pd.DataFrame) and not df.empty:
+            logger.info("Данные корректны. Конвертация в словарь и возврат DataFrame")
+            return df.to_dict(orient="records"), df
+        else:
+            logger.warning("Данные в файле отсутствуют или не являются DataFrame")
+            return [], pd.DataFrame()
+
     except FileNotFoundError:
-        return []
+        logger.warning("Файл по переданному пути отсутствует")
+        return [], pd.DataFrame()
 
-def get_json_currency(file_path)->list:
-    """ Функция, принимающая путь к JSON файлу и возвращающая список данных из файла. """
+
+def get_json_currencies(file_path: Any) -> Any:
+    """
+    Функция, принимающая путь к JSON файлу и возвращающая список данных из файла.
+    """
+    result = []
+
     try:
+        logger.info("Попытка открыть JSON файл")
+
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
 
+            logger.info("Файл открыт успешно")
+            logger.info("Проверка на наличие нужного ключа")
+
             if "user_currencies" in data:
+                logger.info("Ключ найден.")
+                logger.info("Список необходимых данных получен")
+
                 result = data["user_currencies"]
+
+            else:
+                logger.error("Ключ не найден")
 
         return result
 
-    except FileNotFoundError:
-        return []
+    except json.JSONDecodeError as ex:
+        logger.error(
+            f"Невозможно декодировать JSON данные из файла. Возможная причина: {ex}"
+        )
 
-def get_json_stock(file_path)->list:
-    """ Функция, принимающая путь к JSON файлу и возвращающая список данных из файла."""
+        raise ValueError(f"Ошибка при чтении файла: {ex}")
+
+    except Exception as ex:
+        logger.error(f"Невозможно получить необходимые данные Возможная ошибка: {ex}")
+
+        raise Exception(f"Ошибка при чтении файла: {ex}")
+
+
+def get_json_stocks(file_path: Any) -> Any:
+    """
+    Функция, принимающая путь к JSON файлу и возвращающая список данных из файла.
+    """
+    result = []
+
     try:
+
+        logger.info("Попытка открыть JSON файл")
+
         with open(file_path, "r", encoding="utf-8") as f:
             data = json.load(f)
+
+            logger.info("Файл открыт успешно")
+            logger.info("Проверка на наличие нужного ключа")
 
             if "user_stocks" in data:
                 result = data["user_stocks"]
 
-        return result
+                logger.info("Ключ найден.")
+                logger.info("Список необходимых данных получен")
 
-    except FileNotFoundError:
-        return []
+            else:
+                logger.error("Ключ не найден")
 
+            return result
 
-def get_xlsx(path: str) -> tuple[list[dict], pd.DataFrame]:
-    """Функция, принимающая путь до Excel-файла и возвращающая список словарей и DataFrame."""
-    return pd.read_excel(path)
+    except json.JSONDecodeError as ex:
+        logger.error(
+            f"Невозможно декодировать JSON данные из файла. Возможная причина: {ex}"
+        )
 
+        raise ValueError(f"Ошибка при чтении файла: {ex}")
+
+    except Exception as ex:
+        logger.error(f"Невозможно получить необходимые данные Возможная ошибка: {ex}")
+
+        raise Exception(f"Ошибка при чтении файла: {ex}")
